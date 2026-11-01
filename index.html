@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест скорости реакции</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #2b2d42;
+            color: white;
+            user-select: none;
+        }
+
+        #game-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            text-align: center;
+            padding: 20px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        p {
+            font-size: 1.2rem;
+            opacity: 0.8;
+            margin-bottom: 20px;
+        }
+
+        /* Меню выбора попыток */
+        .menu {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+        }
+
+        .buttons-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            background-color: #ef233c;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        button:hover {
+            background-color: #d90429;
+            transform: scale(1.05);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Состояния игрового экрана */
+        .waiting { background-color: #d90429; } /* Красный - ждем */
+        .ready { background-color: #38b000; }    /* Зеленый - жми! */
+        .game-bg { background-color: #2b2d42; }   /* Обычный */
+    </style>
+</head>
+<body>
+
+    <div id="game-container" class="game-bg" onclick="handleGameClick()">
+        
+        <!-- Меню настроек (выбор попыток) -->
+        <div id="menu-screen" class="menu" onclick="event.stopPropagation()">
+            <h1>Тест реакции</h1>
+            <p id="best-score">Лучший результат: —</p>
+            <p>Выбери количество попыток:</p>
+            <div class="buttons-group">
+                <button onclick="startGame(3)">3 попытки</button>
+                <button onclick="startGame(5)">5 попыток</button>
+                <button onclick="startGame(10)">10 попыток</button>
+            </div>
+        </div>
+
+        <!-- Игровой экран (скрыт по умолчанию) -->
+        <div id="play-screen" class="hidden">
+            <h1 id="title">Жди зеленого...</h1>
+            <p id="subtitle">Не нажимай раньше времени!</p>
+            <p id="progress" style="font-size: 1rem; opacity: 0.6;"></p>
+        </div>
+
+    </div>
+
+    <script>
+        const container = document.getElementById('game-container');
+        const menuScreen = document.getElementById('menu-screen');
+        const playScreen = document.getElementById('play-screen');
+        const title = document.getElementById('title');
+        const subtitle = document.getElementById('subtitle');
+        const progress = document.getElementById('progress');
+        const bestScoreText = document.getElementById('best-score');
+
+        let gameState = 'MENU'; // MENU, WAITING, READY, FALSE_START, ROUND_RESULT, FINAL_RESULT
+        let totalRounds = 5;
+        let currentRound = 0;
+        let results = [];
+        let startTime = 0;
+        let timeoutId = null;
+
+        // Загрузка рекорда из памяти браузера при запуске
+        let bestScore = localStorage.getItem('reaction_best');
+        if (bestScore) {
+            bestScoreText.textContent = `Лучший средний результат: ${bestScore} мс`;
+        }
+
+        function startGame(roundsCount) {
+            totalRounds = roundsCount;
+            currentRound = 1;
+            results = [];
+            
+            menuScreen.classList.add('hidden');
+            playScreen.classList.remove('hidden');
+            
+            nextRound();
+        }
+
+        function nextRound() {
+            gameState = 'WAITING';
+            container.className = 'waiting';
+            title.textContent = `Попытка ${currentRound} из ${totalRounds}`;
+            subtitle.textContent = 'Жди зеленого цвета...';
+            progress.textContent = '';
+
+            const randomDelay = Math.floor(Math.random() * 2500) + 1500;
+
+            timeoutId = setTimeout(() => {
+                gameState = 'READY';
+                container.className = 'ready';
+                title.textContent = 'ЖМИ!';
+                subtitle.textContent = 'Кликай!';
+                startTime = Date.now();
+            }, randomDelay);
+        }
+
+        function handleGameClick() {
+            if (gameState === 'WAITING') {
+                // Фальстарт (нажал рано)
+                clearTimeout(timeoutId);
+                gameState = 'FALSE_START';
+                container.className = 'game-bg';
+                title.textContent = 'Рано!';
+                subtitle.textContent = 'Ты поторопился. Нажми, чтобы повторить этот раунд.';
+            } 
+            else if (gameState === 'FALSE_START') {
+                nextRound();
+            }
+            else if (gameState === 'READY') {
+                // Успешный клик
+                const time = Date.now() - startTime;
+                results.push(time);
+                
+                gameState = 'ROUND_RESULT';
+                container.className = 'game-bg';
+                title.textContent = `${time} мс`;
+
+                if (currentRound < totalRounds) {
+                    subtitle.textContent = 'Нажми, чтобы перейти к следующей попытке';
+                    currentRound++;
+                } else {
+                    // Игра окончена, считаем среднее
+                    finishGame();
+                }
+            }
+            else if (gameState === 'ROUND_RESULT') {
+                nextRound();
+            }
+            else if (gameState === 'FINAL_RESULT') {
+                // Возврат в меню
+                playScreen.classList.add('hidden');
+                menuScreen.classList.remove('hidden');
+                gameState = 'MENU';
+            }
+        }
+
+        function finishGame() {
+            gameState = 'FINAL_RESULT';
+            
+            // Вычисление среднего значения
+            const sum = results.reduce((acc, val) => acc + val, 0);
+            const average = Math.round(sum / results.length);
+
+            title.textContent = `Среднее: ${average} мс`;
+            subtitle.textContent = 'Нажми, чтобы вернуться в меню';
+            
+            // Красивый вывод всех результатов в строку
+            progress.textContent = `Все попытки: ${results.join(' мс, ')} мс`;
+
+            // Проверка на личный рекорд
+            if (!bestScore || average < bestScore) {
+                bestScore = average;
+                localStorage.setItem('reaction_best', bestScore);
+                bestScoreText.textContent = `Лучший средний результат: ${bestScore} мс`;
+                subtitle.textContent = '🎉 Новый рекорд! Нажми для возврата в меню';
+            }
+        }
+    </script>
+</body>
+</html>
